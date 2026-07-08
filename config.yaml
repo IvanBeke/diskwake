@@ -1,0 +1,35 @@
+# diskwake configuration
+#
+# Each entry under `disks` describes one drive to manage. The `device` path
+# here is the path *inside the container* — it does not need to match the
+# device's real path on the host (e.g. /dev/sdb). You choose this name
+# yourself and map it to the real host device in docker-compose.yml's
+# `devices:` section. Using a friendly, stable name here (rather than
+# /dev/sdX) means this file never needs to change even if the host
+# reassigns drive letters after a reboot.
+#
+# keepalive_interval: how often (while inside a window) to touch the disk
+# to keep it awake. Should be comfortably shorter than the drive/enclosure's
+# own default idle timeout (commonly 10-30 minutes for USB enclosures).
+#
+# windows: one or more start/end times (24h HH:MM) during which the disk
+# should be kept awake. A window may cross midnight (e.g. 22:00 -> 02:00).
+# Outside all windows, the disk is left alone so its own default idle timer
+# can spin it down.
+
+disks:
+  - name: backup-drive
+    device: /dev/disk/backup-drive
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "23:00"
+
+  - name: media-drive
+    device: /dev/disk/media-drive
+    keepalive_interval: 5m
+    windows:
+      - start: "07:00"
+        end: "09:00"
+      - start: "18:00"
+        end: "22:00"

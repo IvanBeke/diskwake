@@ -1,0 +1,18 @@
+  diskwake:
+    build: ./diskwake
+    container_name: diskwake
+    restart: unless-stopped
+    environment:
+      TZ: Etc/UTC  # set to your local timezone
+    volumes:
+      - ./diskwake/config.yaml:/etc/diskwake/config.yaml:ro
+    devices:
+      # Format is "host_path:container_path". The container_path on the
+      # right must match the `device:` value used for this disk in
+      # config.yaml. The host_path on the left is specific to your
+      # machine — find it with:
+      #   ls -l /dev/disk/by-id/
+      # Always use a /dev/disk/by-id/... path on the host side, never
+      # /dev/sdX directly, since device letters can change across reboots.
+      - "/dev/disk/by-id/REPLACE_WITH_YOUR_DISK_1_ID:/dev/disk/backup-drive"
+      - "/dev/disk/by-id/REPLACE_WITH_YOUR_DISK_2_ID:/dev/disk/media-drive"

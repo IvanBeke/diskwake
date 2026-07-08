@@ -1,0 +1,17 @@
+# Compiled binary
+/diskwake
+diskwake-check
+
+# Host-specific compose file — contains real device IDs from this machine.
+# Keep docker-compose.yml.example in the repo instead, and let users copy
+# it locally as docker-compose.yml with their own device paths.
+docker-compose.yml
+
+# Go build/test artifacts
+*.test
+*.out
+
+# OS/editor cruft
+.DS_Store
+*.swp
+*~
