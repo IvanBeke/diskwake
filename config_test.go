@@ -1,6 +1,7 @@
 package main
 
 import (
+    "os"
     "testing"
     "time"
 )
@@ -66,7 +67,20 @@ func TestWindowContainsCrossesMidnight(t *testing.T) {
 }
 
 func TestLoadConfigValid(t *testing.T) {
-    cfg, err := loadConfig("test-config.yaml")
+        cfgYAML := `
+disks:
+    - name: test-disk
+        device: /dev/disk/test-disk
+        keepalive_interval: 5m
+        windows:
+            - start: "08:00"
+                end: "12:00"
+            - start: "22:00"
+                end: "02:00"
+`
+        path := writeTempConfig(t, cfgYAML)
+
+        cfg, err := loadConfig(path)
     if err != nil {
         t.Fatalf("loadConfig failed: %v", err)
     }
@@ -93,6 +107,113 @@ func TestLoadConfigValid(t *testing.T) {
     if !d.inAnyWindow(time.Date(2026, 1, 1, 23, 30, 0, 0, time.UTC)) {
         t.Errorf("expected 23:30 to be in a window")
     }
+}
+
+func TestWindowContainsDaySpecificSameDay(t *testing.T) {
+    w := Window{Start: "08:00", End: "10:00", Day: "monday", hasDay: true, weekday: time.Monday}
+    w.startMinutes = mustParseHHMM(t, w.Start)
+    w.endMinutes = mustParseHHMM(t, w.End)
+
+    monday := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC)  // Monday
+    tuesday := time.Date(2026, 1, 6, 9, 0, 0, 0, time.UTC) // Tuesday
+
+    if !w.contains(monday) {
+        t.Fatal("expected monday 09:00 to match day-specific window")
+    }
+    if w.contains(tuesday) {
+        t.Fatal("expected tuesday 09:00 to not match monday-only window")
+    }
+}
+
+func TestWindowContainsDaySpecificCrossMidnight(t *testing.T) {
+    w := Window{Start: "22:00", End: "02:00", Day: "mon", hasDay: true, weekday: time.Monday}
+    w.startMinutes = mustParseHHMM(t, w.Start)
+    w.endMinutes = mustParseHHMM(t, w.End)
+
+    monLate := time.Date(2026, 1, 5, 23, 0, 0, 0, time.UTC) // Monday
+    tueEarly := time.Date(2026, 1, 6, 1, 0, 0, 0, time.UTC) // Tuesday
+    tueLate := time.Date(2026, 1, 6, 23, 0, 0, 0, time.UTC) // Tuesday
+
+    if !w.contains(monLate) {
+        t.Fatal("expected monday 23:00 to match monday 22:00->02:00 window")
+    }
+    if !w.contains(tueEarly) {
+        t.Fatal("expected tuesday 01:00 to match monday 22:00->02:00 window")
+    }
+    if w.contains(tueLate) {
+        t.Fatal("expected tuesday 23:00 to not match monday 22:00->02:00 window")
+    }
+}
+
+func TestLoadConfigInvalidDay(t *testing.T) {
+    cfgYAML := `
+disks:
+  - name: bad-day
+    device: /dev/disk/bad-day
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "09:00"
+        day: "funday"
+`
+    path := writeTempConfig(t, cfgYAML)
+
+    _, err := loadConfig(path)
+    if err == nil {
+        t.Fatal("expected error for invalid weekday")
+    }
+}
+
+func TestLoadConfigDayAliases(t *testing.T) {
+    cfgYAML := `
+disks:
+  - name: aliases
+    device: /dev/disk/aliases
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "09:00"
+        day: "Monday"
+      - start: "10:00"
+        end: "11:00"
+        day: "thu"
+`
+    path := writeTempConfig(t, cfgYAML)
+
+    cfg, err := loadConfig(path)
+    if err != nil {
+        t.Fatalf("expected valid day aliases, got error: %v", err)
+    }
+
+    if !cfg.Disks[0].Windows[0].hasDay || cfg.Disks[0].Windows[0].weekday != time.Monday {
+        t.Fatal("expected first window to parse as monday")
+    }
+    if !cfg.Disks[0].Windows[1].hasDay || cfg.Disks[0].Windows[1].weekday != time.Thursday {
+        t.Fatal("expected second window to parse as thursday")
+    }
+}
+
+func writeTempConfig(t *testing.T, content string) string {
+    t.Helper()
+
+    f, err := os.CreateTemp("", "diskwake-config-*.yaml")
+    if err != nil {
+        t.Fatalf("CreateTemp failed: %v", err)
+    }
+
+    if _, err := f.WriteString(content); err != nil {
+        _ = f.Close()
+        t.Fatalf("writing temp config failed: %v", err)
+    }
+    if err := f.Close(); err != nil {
+        t.Fatalf("closing temp config failed: %v", err)
+    }
+
+    t.Cleanup(func() {
+        _ = os.Remove(f.Name())
+    })
+
+    return f.Name()
 }
 
 func TestLoadConfigMissingFields(t *testing.T) {

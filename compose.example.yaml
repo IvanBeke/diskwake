@@ -1,5 +1,7 @@
   diskwake:
-    build: ./diskwake
+    image: ghcr.io/ivanbeke/diskwake:latest
+    # To build from local source instead, replace the image line with:
+    # build: ./diskwake
     container_name: diskwake
     restart: unless-stopped
     environment:

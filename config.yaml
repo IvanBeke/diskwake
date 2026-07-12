@@ -14,6 +14,8 @@
 #
 # windows: one or more start/end times (24h HH:MM) during which the disk
 # should be kept awake. A window may cross midnight (e.g. 22:00 -> 02:00).
+# Optional `day` can pin a window to a specific weekday (e.g. monday, mon).
+# If day is omitted, that window applies every day.
 # Outside all windows, the disk is left alone so its own default idle timer
 # can spin it down.
 
@@ -24,6 +26,7 @@ disks:
     windows:
       - start: "08:00"
         end: "23:00"
+        day: "monday"
 
   - name: media-drive
     device: /dev/disk/media-drive
@@ -31,5 +34,6 @@ disks:
     windows:
       - start: "07:00"
         end: "09:00"
+        day: "saturday"
       - start: "18:00"
         end: "22:00"

@@ -3,6 +3,7 @@ package main
 import (
     "fmt"
     "os"
+    "strings"
     "time"
 
     "github.com/goccy/go-yaml"
@@ -13,9 +14,12 @@ import (
 type Window struct {
     Start string `yaml:"start"`
     End   string `yaml:"end"`
+    Day   string `yaml:"day,omitempty"`
 
     startMinutes int
     endMinutes   int
+    hasDay       bool
+    weekday      time.Weekday
 }
 
 // DiskConfig describes a single disk to manage.
@@ -84,6 +88,16 @@ func loadConfig(path string) (*Config, error) {
             if startMin == endMin {
                 return nil, fmt.Errorf("disk %q window %d: start and end cannot be identical", d.Name, wi)
             }
+
+            if w.Day != "" {
+                weekday, err := parseWeekday(w.Day)
+                if err != nil {
+                    return nil, fmt.Errorf("disk %q window %d has invalid day %q: %w", d.Name, wi, w.Day, err)
+                }
+                w.hasDay = true
+                w.weekday = weekday
+            }
+
             w.startMinutes = startMin
             w.endMinutes = endMin
         }
@@ -101,10 +115,61 @@ func parseHHMM(s string) (int, error) {
     return t.Hour()*60 + t.Minute(), nil
 }
 
-// inWindow reports whether the given time falls inside this window.
+func parseWeekday(s string) (time.Weekday, error) {
+    switch normalizeWeekday(s) {
+    case "sun", "sunday":
+        return time.Sunday, nil
+    case "mon", "monday":
+        return time.Monday, nil
+    case "tue", "tues", "tuesday":
+        return time.Tuesday, nil
+    case "wed", "wednesday":
+        return time.Wednesday, nil
+    case "thu", "thur", "thurs", "thursday":
+        return time.Thursday, nil
+    case "fri", "friday":
+        return time.Friday, nil
+    case "sat", "saturday":
+        return time.Saturday, nil
+    default:
+        return 0, fmt.Errorf("expected weekday name like monday/mon")
+    }
+}
+
+func normalizeWeekday(s string) string {
+    return strings.ToLower(strings.TrimSpace(s))
+}
+
+func (w Window) matchesConfiguredDay(t time.Time, minutes int, crossesMidnight bool) bool {
+    if !w.hasDay {
+        return true
+    }
+
+    wd := t.Weekday()
+    if !crossesMidnight {
+        return wd == w.weekday
+    }
+
+    next := (w.weekday + 1) % 7
+    if wd == w.weekday {
+        return minutes >= w.startMinutes
+    }
+    if wd == next {
+        return minutes < w.endMinutes
+    }
+
+    return false
+}
+
+// contains reports whether the given time falls inside this window.
 // Handles windows that cross midnight (e.g. start=22:00, end=02:00).
 func (w Window) contains(t time.Time) bool {
     minutes := t.Hour()*60 + t.Minute()
+    crossesMidnight := w.startMinutes > w.endMinutes
+
+    if !w.matchesConfiguredDay(t, minutes, crossesMidnight) {
+        return false
+    }
 
     if w.startMinutes <= w.endMinutes {
         return minutes >= w.startMinutes && minutes < w.endMinutes

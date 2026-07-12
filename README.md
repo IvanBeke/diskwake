@@ -38,6 +38,7 @@ disks:
     windows:
       - start: "08:00"
         end: "23:00"
+        day: "monday"
 
   - name: media-drive
     device: /dev/disk/media-drive
@@ -61,6 +62,10 @@ disks:
   cross midnight (e.g. `start: "22:00"`, `end: "02:00"`). Multiple windows
   per disk are supported. Outside all windows, the disk is left alone
   entirely.
+- `day` (optional) — limits a window to a specific weekday (`monday`, `mon`,
+  `tuesday`, etc., case-insensitive). If omitted, that window applies every
+  day. For a midnight-crossing window (for example `22:00 -> 02:00`), a
+  `day: "monday"` window runs from Monday night into early Tuesday.
 
 Times are evaluated in the container's local timezone — set `TZ` in the
 compose environment to match your server.
@@ -86,7 +91,7 @@ This split means `config.yaml` and the rest of the project are fully
 generic and safe to commit/share as-is — only your local compose file
 needs host-specific edits.
 
-## Building and running
+## Running with Docker
 
 Project layout:
 
@@ -114,7 +119,7 @@ from `ls -l /dev/disk/by-id/`:
 
 ```yaml
   diskwake:
-    build: ./diskwake
+    image: ghcr.io/ivanbeke/diskwake:latest
     container_name: diskwake
     restart: unless-stopped
     environment:
@@ -129,6 +134,29 @@ from `ls -l /dev/disk/by-id/`:
 No `privileged: true` or extra capabilities are needed — a plain
 `O_DIRECT` read only requires normal read access to the device node, which
 Docker's `devices:` mapping already grants.
+
+### Option A: Use the published image (ghcr)
+
+```bash
+docker pull ghcr.io/ivanbeke/diskwake:latest
+docker compose up -d diskwake
+docker logs -f diskwake
+```
+
+### Option B: Build locally from source
+
+If you want to build from your local source tree instead of pulling from
+GHCR, switch the service from:
+
+```yaml
+image: ghcr.io/ivanbeke/diskwake:latest
+```
+
+to:
+
+```yaml
+build: ./diskwake
+```
 
 Then run from the directory that contains your compose file:
 
