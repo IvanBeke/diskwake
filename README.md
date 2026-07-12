@@ -6,7 +6,7 @@ own default idle timer can spin them down naturally.
 
 ## Why this exists
 
-USB-SATA bridge chips (like the one in this WD easystore enclosure) often
+USB-SATA bridge chips often
 don't reliably honor a long ATA standby timer set via `hdparm -S` or
 `smartctl -s standby,N` — the bridge's own internal housekeeping resets the
 timer before it ever fires. What *does* reliably work is the bridge's own
@@ -52,7 +52,7 @@ disks:
 - `device` — the path **inside the container**, not the host. This is a
   name you choose yourself (see "Host vs. container paths" below) — it
   doesn't need to look like a real device path at all, as long as it
-  matches what you map in `docker-compose.yml`.
+  matches what you map in your compose file.
 - `keepalive_interval` — any Go duration string (`5m`, `90s`, `1h`, ...).
   Keep this comfortably shorter than the drive's own default idle timeout
   (commonly ~10-30 minutes for USB enclosures) or the drive will still spin
@@ -74,7 +74,7 @@ This is the one thing worth understanding before setting this up.
   pick anything descriptive. Because it's arbitrary, `config.yaml` never
   needs to change even if your host reassigns `/dev/sdX` letters after a
   reboot.
-- **`docker-compose.yml`** is the only place that needs your actual,
+- **Your compose file** is the only place that needs your actual,
   host-specific device path, via the `devices:` mapping
   (`host_path:container_path`). Always use the host's stable
   `/dev/disk/by-id/...` path here, never `/dev/sdX` directly:
@@ -83,24 +83,23 @@ This is the one thing worth understanding before setting this up.
   ```
 
 This split means `config.yaml` and the rest of the project are fully
-generic and safe to commit/share as-is — only your local
-`docker-compose.yml` needs host-specific edits.
+generic and safe to commit/share as-is — only your local compose file
+needs host-specific edits.
 
 ## Building and running
 
 Project layout:
 
 ```
-services/
-├── docker-compose.yml       <- your compose file; add the service block below
-└── diskwake/
-    ├── Dockerfile
-    ├── go.mod
-    ├── go.sum
-    ├── main.go
-    ├── config.go
-    ├── reader.go
-    └── config.yaml          <- edit disk names/windows for your setup
+diskwake/
+├── Dockerfile
+├── go.mod
+├── go.sum
+├── main.go
+├── config.go
+├── reader.go
+├── config.yaml              <- edit disk names/windows for your setup
+└── compose.example.yaml     <- service block template
 ```
 
 `config.yaml` ships with generic placeholder disks (`backup-drive`,
@@ -108,10 +107,10 @@ services/
 leave the `device:` values as-is unless you want different names; they're
 just internal labels, not real paths.
 
-Add this service block to your `docker-compose.yml`, replacing the two
+Copy `compose.example.yaml` into your own `docker-compose.yml` service
+stack (or merge the `diskwake` service block), replacing the two
 `REPLACE_WITH_YOUR_DISK_*_ID` placeholders with your actual host device IDs
-from `ls -l /dev/disk/by-id/` (a filled-in template is also provided as
-`docker-compose.yml.example`):
+from `ls -l /dev/disk/by-id/`:
 
 ```yaml
   diskwake:
@@ -131,7 +130,7 @@ No `privileged: true` or extra capabilities are needed — a plain
 `O_DIRECT` read only requires normal read access to the device node, which
 Docker's `devices:` mapping already grants.
 
-Then:
+Then run from the directory that contains your compose file:
 
 ```bash
 docker compose up -d --build diskwake
