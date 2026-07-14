@@ -67,17 +67,15 @@ func TestWindowContainsCrossesMidnight(t *testing.T) {
 }
 
 func TestLoadConfigValid(t *testing.T) {
-        cfgYAML := `
-disks:
-    - name: test-disk
-        device: /dev/disk/test-disk
-        keepalive_interval: 5m
-        windows:
-            - start: "08:00"
-                end: "12:00"
-            - start: "22:00"
-                end: "02:00"
-`
+    cfgYAML := "disks:\n" +
+        "  - name: test-disk\n" +
+        "    device: /dev/disk/test-disk\n" +
+        "    keepalive_interval: 5m\n" +
+        "    windows:\n" +
+        "      - start: \"08:00\"\n" +
+        "        end: \"12:00\"\n" +
+        "      - start: \"22:00\"\n" +
+        "        end: \"02:00\"\n"
         path := writeTempConfig(t, cfgYAML)
 
         cfg, err := loadConfig(path)

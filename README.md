@@ -4,6 +4,9 @@ A small Go daemon that keeps specific USB-attached drives spinning during
 configured time windows, and leaves them alone the rest of the time so their
 own default idle timer can spin them down naturally.
 
+It includes a thin read-only web UI for viewing current configuration,
+per-disk runtime status, and live in-process logs.
+
 ## Why this exists
 
 USB-SATA bridge chips often
@@ -143,6 +146,30 @@ docker compose up -d diskwake
 docker logs -f diskwake
 ```
 
+The read-only web UI runs by default on port 8080. Publish the container
+port in compose:
+
+```yaml
+ports:
+  - "8080:8080"
+```
+
+To change the UI port, use either CLI flag or env var:
+
+```yaml
+command: ["--config", "/etc/diskwake/config.yaml", "--port", "8090"]
+```
+
+or
+
+```yaml
+environment:
+  TZ: Etc/UTC
+  DISKWAKE_PORT: "8090"
+```
+
+Then open `http://<your-server-ip>:8080` on your LAN.
+
 ### Option B: Build locally from source
 
 If you want to build from your local source tree instead of pulling from
@@ -164,6 +191,22 @@ Then run from the directory that contains your compose file:
 docker compose up -d --build diskwake
 docker logs -f diskwake
 ```
+
+## Web UI (read-only)
+
+- Enabled by default on `:8080`.
+- Override with `--port` or `DISKWAKE_PORT`.
+- LAN-accessible when the container/host port is published.
+- No authentication is built in.
+- Shows current runtime state only (not persisted historical logs).
+
+UI endpoints:
+
+- `/` — dashboard
+- `/api/status` — JSON server time/timezone and per-disk status
+- `/api/config` — JSON read-only config path/content
+- `/api/logs` — JSON current in-memory log buffer
+- `/api/logs/stream` — live log stream (Server-Sent Events)
 
 You should see startup log lines listing the loaded disks/windows, followed
 by a line every `keepalive_interval` — either `keep-awake read OK` while

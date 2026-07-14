@@ -6,8 +6,13 @@
     restart: unless-stopped
     environment:
       TZ: Etc/UTC  # set to your local timezone
+      # Optional override. UI runs on :8080 by default.
+      # DISKWAKE_PORT: "8080"
     volumes:
       - ./diskwake/config.yaml:/etc/diskwake/config.yaml:ro
+    # Read-only web UI. Exposes status, current config, and live logs.
+    ports:
+      - "8080:8080"
     devices:
       # Format is "host_path:container_path". The container_path on the
       # right must match the `device:` value used for this disk in
