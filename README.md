@@ -31,7 +31,9 @@ the kernel page cache, guaranteeing the read actually reaches the physical
 drive over USB rather than being served from cache and silently doing
 nothing.
 
-## Config format
+## Using diskwake
+
+### Config format
 
 ```yaml
 disks:
@@ -73,7 +75,7 @@ disks:
 Times are evaluated in the container's local timezone — set `TZ` in the
 compose environment to match your server.
 
-## Host vs. container device paths
+### Host vs. container device paths
 
 This is the one thing worth understanding before setting this up.
 
@@ -94,57 +96,45 @@ This split means `config.yaml` and the rest of the project are fully
 generic and safe to commit/share as-is — only your local compose file
 needs host-specific edits.
 
-## Running with Docker
+### Run with Docker
 
-Project layout:
-
-```
-diskwake/
-├── Dockerfile
-├── go.mod
-├── go.sum
-├── main.go
-├── config.go
-├── reader.go
-├── config.yaml              <- edit disk names/windows for your setup
-└── compose.example.yaml     <- service block template
-```
-
-`config.yaml` ships with generic placeholder disks (`backup-drive`,
-`media-drive`) — edit the names and windows to fit your setup, but you can
-leave the `device:` values as-is unless you want different names; they're
-just internal labels, not real paths.
-
-Copy `compose.example.yaml` into your own `docker-compose.yml` service
-stack (or merge the `diskwake` service block), replacing the two
-`REPLACE_WITH_YOUR_DISK_*_ID` placeholders with your actual host device IDs
-from `ls -l /dev/disk/by-id/`:
+Create a `compose.yaml` next to `config.yaml` using this minimal service:
 
 ```yaml
+services:
   diskwake:
     image: ghcr.io/ivanbeke/diskwake:latest
     container_name: diskwake
     restart: unless-stopped
     environment:
-      TZ: Etc/UTC  # set to your local timezone
+      TZ: Etc/UTC
     volumes:
-      - ./diskwake/config.yaml:/etc/diskwake/config.yaml:ro
+      - ./config.yaml:/etc/diskwake/config.yaml:ro
+    ports:
+      - "8080:8080"
     devices:
       - "/dev/disk/by-id/REPLACE_WITH_YOUR_DISK_1_ID:/dev/disk/backup-drive"
       - "/dev/disk/by-id/REPLACE_WITH_YOUR_DISK_2_ID:/dev/disk/media-drive"
 ```
 
+Then:
+
+1. Edit `config.yaml` with your desired windows.
+2. Replace `REPLACE_WITH_YOUR_DISK_*_ID` with real host IDs from
+   `ls -l /dev/disk/by-id/`.
+3. Start it:
+
+```bash
+docker compose up -d
+docker logs -f diskwake
+```
+
+`compose.example.yaml` is kept in this repo as a development-focused local
+build template.
+
 No `privileged: true` or extra capabilities are needed — a plain
 `O_DIRECT` read only requires normal read access to the device node, which
 Docker's `devices:` mapping already grants.
-
-### Option A: Use the published image (ghcr)
-
-```bash
-docker pull ghcr.io/ivanbeke/diskwake:latest
-docker compose up -d diskwake
-docker logs -f diskwake
-```
 
 The read-only web UI runs by default on port 8080. Publish the container
 port in compose:
@@ -170,29 +160,7 @@ environment:
 
 Then open `http://<your-server-ip>:8080` on your LAN.
 
-### Option B: Build locally from source
-
-If you want to build from your local source tree instead of pulling from
-GHCR, switch the service from:
-
-```yaml
-image: ghcr.io/ivanbeke/diskwake:latest
-```
-
-to:
-
-```yaml
-build: ./diskwake
-```
-
-Then run from the directory that contains your compose file:
-
-```bash
-docker compose up -d --build diskwake
-docker logs -f diskwake
-```
-
-## Web UI (read-only)
+### Web UI (read-only)
 
 - Enabled by default on `:8080`.
 - Override with `--port` or `DISKWAKE_PORT`.
@@ -212,7 +180,7 @@ You should see startup log lines listing the loaded disks/windows, followed
 by a line every `keepalive_interval` — either `keep-awake read OK` while
 inside a window, or `outside configured windows, leaving idle` otherwise.
 
-## Testing changes without waiting
+### Testing changes without waiting
 
 Since the container logs every tick, you can quickly sanity-check a config
 change by setting a window that includes right now and a short
@@ -224,7 +192,7 @@ docker compose restart diskwake
 docker logs -f diskwake
 ```
 
-## Notes
+### Notes
 
 - This intentionally does *not* touch `smartd`, `hdparm`, or any ATA
   standby timer — it relies entirely on the bridge's own default idle
@@ -232,3 +200,59 @@ docker logs -f diskwake
 - If a disk still won't stay awake during its window, try lowering
   `keepalive_interval` — the enclosure's true default idle timeout may be
   shorter than assumed.
+
+## Developing diskwake
+
+### Project layout
+
+```
+diskwake/
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml
+├── Dockerfile
+├── README.md
+├── compose.example.yaml
+├── config.go
+├── config.yaml
+├── config_test.go
+├── go.mod
+├── go.sum
+├── main.go
+├── main_test.go
+├── reader.go
+├── state.go
+└── web.go
+```
+
+### Local development workflow
+
+Run tests:
+
+```bash
+go test ./...
+```
+
+Run directly on host (for development):
+
+```bash
+go run . -config ./config.yaml -port 8080
+```
+
+Build a local binary:
+
+```bash
+go build -o diskwake .
+```
+
+Build the container image locally:
+
+```bash
+docker build -t diskwake:dev .
+```
+
+### Publishing image changes
+
+Container publish automation lives in `.github/workflows/docker-publish.yml`.
+The workflow runs tests and then builds/pushes/signs the GHCR image on pushes
+to `main` and version tags (`v*`).

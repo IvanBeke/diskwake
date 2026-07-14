@@ -1,7 +1,6 @@
+services:
   diskwake:
-    image: ghcr.io/ivanbeke/diskwake:latest
-    # To build from local source instead, replace the image line with:
-    # build: ./diskwake
+    build: .
     container_name: diskwake
     restart: unless-stopped
     environment:
@@ -9,7 +8,7 @@
       # Optional override. UI runs on :8080 by default.
       # DISKWAKE_PORT: "8080"
     volumes:
-      - ./diskwake/config.yaml:/etc/diskwake/config.yaml:ro
+      - ./config.yaml:/etc/diskwake/config.yaml:ro
     # Read-only web UI. Exposes status, current config, and live logs.
     ports:
       - "8080:8080"
