@@ -108,7 +108,7 @@ func TestLoadConfigValid(t *testing.T) {
 }
 
 func TestWindowContainsDaySpecificSameDay(t *testing.T) {
-	w := Window{Start: "08:00", End: "10:00", Day: "monday", hasDay: true, weekday: time.Monday}
+	w := Window{Start: "08:00", End: "10:00", hasDayFilter: true, weekdays: []time.Weekday{time.Monday}}
 	w.startMinutes = mustParseHHMM(t, w.Start)
 	w.endMinutes = mustParseHHMM(t, w.End)
 
@@ -124,7 +124,7 @@ func TestWindowContainsDaySpecificSameDay(t *testing.T) {
 }
 
 func TestWindowContainsDaySpecificCrossMidnight(t *testing.T) {
-	w := Window{Start: "22:00", End: "02:00", Day: "mon", hasDay: true, weekday: time.Monday}
+	w := Window{Start: "22:00", End: "02:00", hasDayFilter: true, weekdays: []time.Weekday{time.Monday}}
 	w.startMinutes = mustParseHHMM(t, w.Start)
 	w.endMinutes = mustParseHHMM(t, w.End)
 
@@ -183,11 +183,80 @@ disks:
 		t.Fatalf("expected valid day aliases, got error: %v", err)
 	}
 
-	if !cfg.Disks[0].Windows[0].hasDay || cfg.Disks[0].Windows[0].weekday != time.Monday {
+	if !cfg.Disks[0].Windows[0].hasDayFilter || len(cfg.Disks[0].Windows[0].weekdays) != 1 || cfg.Disks[0].Windows[0].weekdays[0] != time.Monday {
 		t.Fatal("expected first window to parse as monday")
 	}
-	if !cfg.Disks[0].Windows[1].hasDay || cfg.Disks[0].Windows[1].weekday != time.Thursday {
+	if !cfg.Disks[0].Windows[1].hasDayFilter || len(cfg.Disks[0].Windows[1].weekdays) != 1 || cfg.Disks[0].Windows[1].weekdays[0] != time.Thursday {
 		t.Fatal("expected second window to parse as thursday")
+	}
+}
+
+func TestLoadConfigDaysArray(t *testing.T) {
+	cfgYAML := `
+disks:
+  - name: multi-day
+    device: /dev/disk/multi-day
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "09:00"
+        days: ["mon", "wednesday"]
+`
+	path := writeTempConfig(t, cfgYAML)
+
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("expected valid days array, got error: %v", err)
+	}
+
+	w := cfg.Disks[0].Windows[0]
+	if !w.contains(time.Date(2026, 1, 5, 8, 30, 0, 0, time.UTC)) { // Monday
+		t.Fatal("expected monday to match days filter")
+	}
+	if !w.contains(time.Date(2026, 1, 7, 8, 30, 0, 0, time.UTC)) { // Wednesday
+		t.Fatal("expected wednesday to match days filter")
+	}
+	if w.contains(time.Date(2026, 1, 6, 8, 30, 0, 0, time.UTC)) { // Tuesday
+		t.Fatal("expected tuesday to not match days filter")
+	}
+}
+
+func TestLoadConfigInvalidDaysEntry(t *testing.T) {
+	cfgYAML := `
+disks:
+  - name: bad-days
+    device: /dev/disk/bad-days
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "09:00"
+        days: ["monday", "funday"]
+`
+	path := writeTempConfig(t, cfgYAML)
+
+	_, err := loadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid weekday in days array")
+	}
+}
+
+func TestLoadConfigRejectsDayAndDaysTogether(t *testing.T) {
+	cfgYAML := `
+disks:
+  - name: both-fields
+    device: /dev/disk/both-fields
+    keepalive_interval: 5m
+    windows:
+      - start: "08:00"
+        end: "09:00"
+        day: "monday"
+        days: ["wednesday"]
+`
+	path := writeTempConfig(t, cfgYAML)
+
+	_, err := loadConfig(path)
+	if err == nil {
+		t.Fatal("expected error when both day and days are set")
 	}
 }
 

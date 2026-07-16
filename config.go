@@ -15,11 +15,12 @@ type Window struct {
 	Start string `yaml:"start"`
 	End   string `yaml:"end"`
 	Day   string `yaml:"day,omitempty"`
+	Days  []string `yaml:"days,omitempty"`
 
 	startMinutes int
 	endMinutes   int
-	hasDay       bool
-	weekday      time.Weekday
+	hasDayFilter bool
+	weekdays     []time.Weekday
 }
 
 // DiskConfig describes a single disk to manage.
@@ -77,6 +78,9 @@ func loadConfig(path string) (*Config, error) {
 
 		for wi := range d.Windows {
 			w := &d.Windows[wi]
+			if strings.TrimSpace(w.Day) != "" && len(w.Days) > 0 {
+				return nil, fmt.Errorf("disk %q window %d cannot set both day and days", d.Name, wi)
+			}
 			startMin, err := parseHHMM(w.Start)
 			if err != nil {
 				return nil, fmt.Errorf("disk %q window %d has invalid start %q: %w", d.Name, wi, w.Start, err)
@@ -89,13 +93,27 @@ func loadConfig(path string) (*Config, error) {
 				return nil, fmt.Errorf("disk %q window %d: start and end cannot be identical", d.Name, wi)
 			}
 
+			dayValues := make([]string, 0, len(w.Days)+1)
 			if w.Day != "" {
-				weekday, err := parseWeekday(w.Day)
-				if err != nil {
-					return nil, fmt.Errorf("disk %q window %d has invalid day %q: %w", d.Name, wi, w.Day, err)
+				dayValues = append(dayValues, w.Day)
+			}
+			dayValues = append(dayValues, w.Days...)
+
+			if len(dayValues) > 0 {
+				w.hasDayFilter = true
+				w.weekdays = make([]time.Weekday, 0, len(dayValues))
+				seen := make(map[time.Weekday]struct{}, len(dayValues))
+				for _, day := range dayValues {
+					weekday, err := parseWeekday(day)
+					if err != nil {
+						return nil, fmt.Errorf("disk %q window %d has invalid day %q: %w", d.Name, wi, day, err)
+					}
+					if _, ok := seen[weekday]; ok {
+						continue
+					}
+					seen[weekday] = struct{}{}
+					w.weekdays = append(w.weekdays, weekday)
 				}
-				w.hasDay = true
-				w.weekday = weekday
 			}
 
 			w.startMinutes = startMin
@@ -140,22 +158,33 @@ func normalizeWeekday(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
+func containsWeekday(days []time.Weekday, day time.Weekday) bool {
+	for _, d := range days {
+		if d == day {
+			return true
+		}
+	}
+	return false
+}
+
 func (w Window) matchesConfiguredDay(t time.Time, minutes int, crossesMidnight bool) bool {
-	if !w.hasDay {
+	if !w.hasDayFilter {
 		return true
 	}
 
 	wd := t.Weekday()
 	if !crossesMidnight {
-		return wd == w.weekday
+		return containsWeekday(w.weekdays, wd)
 	}
 
-	next := (w.weekday + 1) % 7
-	if wd == w.weekday {
-		return minutes >= w.startMinutes
-	}
-	if wd == next {
-		return minutes < w.endMinutes
+	for _, day := range w.weekdays {
+		next := (day + 1) % 7
+		if wd == day && minutes >= w.startMinutes {
+			return true
+		}
+		if wd == next && minutes < w.endMinutes {
+			return true
+		}
 	}
 
 	return false

@@ -43,7 +43,7 @@ disks:
     windows:
       - start: "08:00"
         end: "23:00"
-        day: "monday"
+        days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
 
   - name: media-drive
     device: /dev/disk/media-drive
@@ -53,6 +53,7 @@ disks:
         end: "22:00"
       - start: "07:00"
         end: "09:00"
+        days: ["saturday", "sunday"]
 ```
 
 - `device` — the path **inside the container**, not the host. This is a
@@ -67,10 +68,13 @@ disks:
   cross midnight (e.g. `start: "22:00"`, `end: "02:00"`). Multiple windows
   per disk are supported. Outside all windows, the disk is left alone
   entirely.
-- `day` (optional) — limits a window to a specific weekday (`monday`, `mon`,
-  `tuesday`, etc., case-insensitive). If omitted, that window applies every
-  day. For a midnight-crossing window (for example `22:00 -> 02:00`), a
-  `day: "monday"` window runs from Monday night into early Tuesday.
+- `days` (optional) — limits a window to one or more weekdays (`["monday",
+  "wed"]`, case-insensitive).
+- `day` (optional, legacy) — single-day form kept for backward compatibility.
+  `day` and `days` are mutually exclusive for a single window; setting both is
+  a startup validation error.
+  For a midnight-crossing window (for example `22:00 -> 02:00`), configured
+  weekdays run from the named day(s) into the following early morning.
 
 Times are evaluated in the container's local timezone — set `TZ` in the
 compose environment to match your server.
@@ -236,7 +240,7 @@ go test ./...
 Run directly on host (for development):
 
 ```bash
-go run . -config ./config.yaml -port 8080
+go run . --config ./config.yaml --port 8080
 ```
 
 Build a local binary:

@@ -77,8 +77,15 @@ func newRuntimeState(cfg *Config, configPath, configText string, maxLogs int) *r
 		windows := make([]string, 0, len(d.Windows))
 		for _, w := range d.Windows {
 			label := w.Start + "->" + w.End
+			dayLabels := make([]string, 0, len(w.Days)+1)
 			if w.Day != "" {
-				label += " (" + strings.ToLower(strings.TrimSpace(w.Day)) + ")"
+				dayLabels = append(dayLabels, strings.ToLower(strings.TrimSpace(w.Day)))
+			}
+			for _, day := range w.Days {
+				dayLabels = append(dayLabels, strings.ToLower(strings.TrimSpace(day)))
+			}
+			if len(dayLabels) > 0 {
+				label += " (" + strings.Join(dayLabels, ",") + ")"
 			}
 			windows = append(windows, label)
 		}
